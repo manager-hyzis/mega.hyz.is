@@ -2,9 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Users, Share2, Edit2, Check, X, Trophy, Sparkles, Printer, Lock } from 'lucide-react';
+import { Users, Share2, Edit2, Check, X } from 'lucide-react';
 import { formatPhoneNumber, normalizaPhoneNumber } from '@/lib/phone';
-import DisclaimerFooter from '@/app/components/DisclaimerFooter';
+import { gerarBolao, historico } from '@/lib/gerador';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Usuario {
   id: string;
@@ -45,8 +55,43 @@ export default function BolaoPage() {
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [usuariosVinculados, setUsuariosVinculados] = useState<any[]>([]);
+  const [mostrarHistorico, setMostrarHistorico] = useState(false);
+  const [mostrarGrafico, setMostrarGrafico] = useState(false);
+  
+  // Estados para AlertDialog
+  const [alertDialog, setAlertDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm?: () => void;
+    confirmText?: string;
+    cancelText?: string;
+    isDestructive?: boolean;
+  }>({
+    open: false,
+    title: '',
+    description: '',
+    confirmText: 'Confirmar',
+    cancelText: 'Cancelar',
+    isDestructive: false,
+  });
 
   useEffect(() => {
+    // Verificar se é admin autenticado na home page
+    const adminToken = localStorage.getItem('adminToken');
+    const adminTokenExpiry = localStorage.getItem('adminTokenExpiry');
+    
+    if (adminToken && adminTokenExpiry) {
+      const now = new Date().getTime();
+      if (now < parseInt(adminTokenExpiry)) {
+        setIsAdmin(true);
+      } else {
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminTokenExpiry');
+      }
+    }
+    
+    // Se não é admin, verificar autenticação de usuário
     const savedToken = localStorage.getItem('token');
     const savedUsuario = localStorage.getItem('usuario');
     const tokenExpiry = localStorage.getItem('tokenExpiry');
@@ -62,25 +107,37 @@ export default function BolaoPage() {
         localStorage.removeItem('tokenExpiry');
         setMostrarAuth(true);
       }
-    } else if (!savedToken) {
+    } else if (!savedToken && !adminToken) {
       setMostrarAuth(true);
     }
-    
-    carregarBolao();
   }, []);
+
+  useEffect(() => {
+    if (params.id) {
+      carregarBolao();
+    }
+  }, [params.id]);
 
   const carregarBolao = async () => {
     try {
-      const linkId = params.id;
+      setLoading(true);
+      const linkId = params.id as string;
+      
+      if (!linkId) {
+        throw new Error('Link ID não fornecido');
+      }
+      
       const res = await fetch(`/api/bolao?linkId=${linkId}`);
       
-      if (!res.ok) throw new Error('Bolão não encontrado');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Bolão não encontrado');
+      }
       
       const data = await res.json();
       setBolao(data);
     } catch (error) {
       console.error('Erro ao carregar bolão:', error);
-      alert('Erro ao carregar bolão');
     } finally {
       setLoading(false);
     }
@@ -138,7 +195,13 @@ export default function BolaoPage() {
       setIsRegistering(false);
     } catch (error: any) {
       console.error('Erro na autenticação:', error);
-      alert(error.message || 'Erro ao autenticar. Tente novamente.');
+      setAlertDialog({
+        open: true,
+        title: 'Erro na Autenticação',
+        description: error.message || 'Erro ao autenticar. Tente novamente.',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     }
   };
 
@@ -150,7 +213,13 @@ export default function BolaoPage() {
 
     const jogo = bolao?.jogos.find(j => j.id === jogoId);
     if (jogo?.reservado) {
-      alert('Este jogo já foi reservado por outro participante');
+      setAlertDialog({
+        open: true,
+        title: 'Jogo Indisponível',
+        description: 'Este jogo já foi reservado por outro participante.',
+        confirmText: 'OK',
+        cancelText: '',
+      });
       return;
     }
     
@@ -170,10 +239,22 @@ export default function BolaoPage() {
       }
       
       await carregarBolao();
-      alert('Jogo reservado com sucesso!');
+      setAlertDialog({
+        open: true,
+        title: '✅ Sucesso!',
+        description: 'Jogo reservado com sucesso!',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     } catch (error: any) {
       console.error('Erro ao reservar jogo:', error);
-      alert(error.message || 'Erro ao reservar jogo');
+      setAlertDialog({
+        open: true,
+        title: 'Erro ao Reservar',
+        description: error.message || 'Erro ao reservar jogo',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     }
   };
 
@@ -215,17 +296,40 @@ export default function BolaoPage() {
       await carregarBolao();
       setJogoEditando(null);
       setNumerosEditando([]);
-      alert('Jogo editado com sucesso!');
+      setAlertDialog({
+        open: true,
+        title: '✅ Sucesso!',
+        description: 'Jogo editado com sucesso!',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     } catch (error: any) {
       console.error('Erro ao editar jogo:', error);
-      alert(error.message || 'Erro ao editar jogo');
+      setAlertDialog({
+        open: true,
+        title: 'Erro ao Editar',
+        description: error.message || 'Erro ao editar jogo',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     }
   };
 
   const cancelarReserva = async (jogoId: string) => {
     if (!token) return;
     
-    if (!confirm('Deseja realmente cancelar este jogo?')) return;
+    setAlertDialog({
+      open: true,
+      title: 'Cancelar Reserva',
+      description: 'Deseja realmente cancelar este jogo?',
+      confirmText: 'Sim, Cancelar',
+      cancelText: 'Não',
+      isDestructive: true,
+      onConfirm: () => executarCancelamento(jogoId),
+    });
+  };
+
+  const executarCancelamento = async (jogoId: string) => {
     
     try {
       const res = await fetch(`/api/jogos?jogoId=${jogoId}`, {
@@ -241,10 +345,22 @@ export default function BolaoPage() {
       }
       
       await carregarBolao();
-      alert('Reserva cancelada com sucesso!');
+      setAlertDialog({
+        open: true,
+        title: '✅ Sucesso!',
+        description: 'Reserva cancelada com sucesso!',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     } catch (error: any) {
       console.error('Erro ao cancelar reserva:', error);
-      alert(error.message || 'Erro ao cancelar reserva');
+      setAlertDialog({
+        open: true,
+        title: 'Erro ao Cancelar',
+        description: error.message || 'Erro ao cancelar reserva',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     }
   };
 
@@ -256,7 +372,13 @@ export default function BolaoPage() {
       setAdminPassword('');
       carregarUsuariosVinculados();
     } else {
-      alert('Senha de admin incorreta');
+      setAlertDialog({
+        open: true,
+        title: 'Acesso Negado',
+        description: 'Senha de admin incorreta.',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     }
   };
 
@@ -339,7 +461,13 @@ export default function BolaoPage() {
       });
     } else {
       navigator.clipboard.writeText(bolao.linkCompartilhamento);
-      alert('Link copiado para a área de transferência!');
+      setAlertDialog({
+        open: true,
+        title: '✅ Link Copiado!',
+        description: 'Link copiado para a área de transferência!',
+        confirmText: 'OK',
+        cancelText: '',
+      });
     }
   };
 
@@ -348,6 +476,16 @@ export default function BolaoPage() {
       num = num.toString().split('').reduce((a, b) => parseInt(a.toString()) + parseInt(b), 0);
     }
     return num;
+  };
+
+  const calcularFrequencia = () => {
+    const freq: { [key: number]: number } = {};
+    historico.forEach((ano) => {
+      ano.numeros.forEach(num => {
+        freq[num] = (freq[num] || 0) + 1;
+      });
+    });
+    return freq;
   };
 
   if (loading) {
@@ -373,96 +511,264 @@ export default function BolaoPage() {
   const jogosReservados = bolao.jogos.filter(j => j.reservado).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-600 to-emerald-700">
-      <div className="bg-green-700 shadow-lg">
-        <div className="max-w-6xl mx-auto p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Trophy className="text-yellow-400" size={32} />
-              <div>
-                <h1 className="text-2xl font-bold text-white">{bolao.nome}</h1>
-                <p className="text-green-100 text-sm">{bolao.descricao}</p>
+    <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-600 to-emerald-700 p-3 sm:p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header Principal */}
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
+            <div className="flex items-start gap-2 sm:gap-3 flex-1">
+              <span className="text-3xl sm:text-4xl flex-shrink-0">🍀</span>
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-green-700 break-words">{bolao.nome}</h1>
+                <p className="text-sm sm:text-base text-gray-600 break-words">{bolao.descricao}</p>
               </div>
             </div>
-            <div className="flex gap-2">
-              {!isAdmin && (
-                <button
-                  onClick={() => setShowAdminPanel(true)}
-                  className="bg-white/20 text-white px-4 py-2 rounded-lg font-semibold hover:bg-white/30 transition-all flex items-center gap-2"
-                >
-                  <Lock size={18} />
-                  Admin
-                </button>
-              )}
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
               {isAdmin && (
                 <button
                   onClick={() => {
-                    setIsAdmin(false);
-                    setShowAdminPanel(false);
+                    const conteudo = bolao.jogos.map((jogo, idx) => {
+                      const nomeJogador = jogo.usuario?.nome || 'Disponível';
+                      const numeros = jogo.numeros.join(', ');
+                      return `Jogo ${(idx + 1).toString().padStart(2, '0')}: ${numeros} - ${nomeJogador}`;
+                    }).join('\n');
+                    
+                    const janela = window.open('', '', 'width=600,height=800');
+                    if (janela) {
+                      janela.document.write(`
+                        <html>
+                          <head>
+                            <title>${bolao.nome}</title>
+                            <style>
+                              body { font-family: Arial, sans-serif; padding: 20px; }
+                              h1 { text-align: center; color: #15803d; }
+                              p { text-align: center; color: #666; margin-bottom: 20px; }
+                              pre { font-size: 14px; line-height: 1.8; }
+                            </style>
+                          </head>
+                          <body>
+                            <h1>${bolao.nome}</h1>
+                            <p>${bolao.descricao}</p>
+                            <pre>${conteudo}</pre>
+                          </body>
+                        </html>
+                      `);
+                      janela.document.close();
+                      janela.print();
+                    }
                   }}
-                  className="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition-all"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg font-semibold transition-all text-sm sm:text-base flex items-center gap-1 sm:gap-2 flex-1 sm:flex-none justify-center"
                 >
-                  Sair Admin
+                  <span className="hidden sm:inline">🖨️</span>
+                  <span className="sm:hidden">🖨️</span>
+                  <span className="hidden sm:inline">Imprimir</span>
                 </button>
               )}
               <button
                 onClick={compartilhar}
-                className="bg-white text-green-700 px-4 py-2 rounded-lg font-semibold hover:bg-green-50 transition-all flex items-center gap-2"
+                className="bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded-lg font-semibold transition-all text-sm sm:text-base flex items-center gap-1 sm:gap-2 flex-1 sm:flex-none justify-center"
               >
-                <Share2 size={18} />
-                Compartilhar
+                <Share2 size={16} className="sm:w-[18px] sm:h-[18px]" />
+                <span className="hidden sm:inline">Compartilhar</span>
+                <span className="sm:hidden">Compartilhar</span>
               </button>
+              {usuario && (
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('usuario');
+                    setUsuario(null);
+                    setToken(null);
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 sm:px-4 py-2 rounded-lg font-semibold transition-all text-sm sm:text-base flex-1 sm:flex-none"
+                >
+                  Sair
+                </button>
+              )}
             </div>
           </div>
-          
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <div className="bg-white/20 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-white">{bolao.jogos.length}</div>
-              <div className="text-green-100 text-sm">Total de Jogos</div>
+
+          {/* Estatísticas */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            <div className="bg-green-50 p-2 sm:p-3 rounded border border-green-200">
+              <div className="text-green-700 font-bold text-base sm:text-lg">{bolao.jogos.length}</div>
+              <div className="text-xs text-gray-600">Total</div>
             </div>
-            <div className="bg-white/20 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-white">{jogosReservados}</div>
-              <div className="text-green-100 text-sm">Reservados</div>
+            <div className="bg-yellow-50 p-2 sm:p-3 rounded border border-yellow-200">
+              <div className="text-yellow-700 font-bold text-base sm:text-lg">{jogosReservados}</div>
+              <div className="text-xs text-gray-600">Reservados</div>
             </div>
-            <div className="bg-white/20 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-yellow-400">{jogosDisponiveis}</div>
-              <div className="text-green-100 text-sm">Disponíveis</div>
+            <div className="bg-blue-50 p-2 sm:p-3 rounded border border-blue-200">
+              <div className="text-blue-700 font-bold text-base sm:text-lg">{jogosDisponiveis}</div>
+              <div className="text-xs text-gray-600">Disponíveis</div>
             </div>
+            {usuario && (
+              <div className="bg-purple-50 p-2 sm:p-3 rounded border border-purple-200">
+                <div className="text-purple-700 font-bold text-xs sm:text-sm truncate">{usuario.nome}</div>
+                <div className="text-xs text-gray-600 truncate">{formatPhoneNumber(usuario.whatsapp)}</div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {usuario && (
-        <div className="bg-green-600 border-b border-green-500">
-          <div className="max-w-6xl mx-auto p-3">
-            <div className="flex items-center justify-between text-white">
-              <div className="flex items-center gap-2">
-                <div className="bg-white/20 rounded-full p-2">
-                  <Users size={16} />
-                </div>
-                <div>
-                  <span className="font-semibold">{usuario.nome}</span>
-                  <span className="text-green-100 text-sm ml-2">• {formatPhoneNumber(usuario.whatsapp)}</span>
-                </div>
-              </div>
+        {usuario && (
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-6">
+            <div className="grid grid-cols-2 gap-0">
               <button
                 onClick={() => {
-                  localStorage.removeItem('token');
-                  localStorage.removeItem('usuario');
-                  setUsuario(null);
-                  setToken(null);
+                  setMostrarHistorico(!mostrarHistorico);
+                  setMostrarGrafico(false);
                 }}
-                className="text-sm hover:underline"
+                className={`p-4 font-semibold text-center transition-all ${
+                  mostrarHistorico
+                    ? 'bg-green-600 text-white shadow-md'
+                    : 'bg-white text-green-700 border-2 border-green-200'
+                }`}
               >
-                Sair
+                📅 Histórico
+              </button>
+              <button
+                onClick={() => {
+                  setMostrarGrafico(!mostrarGrafico);
+                  setMostrarHistorico(false);
+                }}
+                className={`p-4 font-semibold text-center transition-all ${
+                  mostrarGrafico
+                    ? 'bg-green-600 text-white shadow-md'
+                    : 'bg-white text-green-700 border-2 border-green-200'
+                }`}
+              >
+                📊 Gráfico
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      <div className="max-w-6xl mx-auto p-4">
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {mostrarHistorico && (
+              <div className="p-3 sm:p-6 bg-white border-t-2 border-green-100">
+                <h3 className="font-bold mb-4 text-green-800 flex items-center gap-2 text-sm sm:text-base">
+                  📅 Histórico Completo (2009-2024)
+                </h3>
+                <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+                  <table className="w-full text-xs sm:text-sm min-w-full">
+                    <thead>
+                      <tr className="bg-green-600 text-white">
+                        <th className="p-2 text-left">Ano</th>
+                        <th className="p-2 text-left">Números</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historico.map((jogo, idx) => (
+                        <tr key={jogo.ano} className={idx % 2 === 0 ? 'bg-green-50' : 'bg-white'}>
+                          <td className="p-2 font-bold text-green-700 whitespace-nowrap">{jogo.ano}</td>
+                          <td className="p-2">
+                            <div className="flex gap-1 flex-wrap">
+                              {jogo.numeros.map((num, i) => {
+                                const ehNumeroUm = reduzirNumerologico(num) === 1;
+                                return (
+                                  <span
+                                    key={i}
+                                    className={`inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full text-white font-bold text-xs shadow ${
+                                      ehNumeroUm
+                                        ? 'bg-gradient-to-br from-yellow-400 to-yellow-600'
+                                        : 'bg-green-600'
+                                    }`}
+                                  >
+                                    {num.toString().padStart(2, '0')}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {mostrarGrafico && (
+              <div className="p-3 sm:p-6 bg-white border-t-2 border-green-100">
+                <h3 className="font-bold mb-4 text-green-800 flex items-center gap-2 text-sm sm:text-base">
+                  📊 Top 15 Números Mais Sorteados
+                </h3>
+                <div className="space-y-2">
+                  {Object.entries(calcularFrequencia())
+                    .sort((a, b) => (b[1] as number) - (a[1] as number))
+                    .slice(0, 15)
+                    .map(([num, frequencia], idx) => {
+                      const ehNumeroUm = reduzirNumerologico(parseInt(num)) === 1;
+                      const porcentagem = ((frequencia as number) / 16) * 100;
+                      
+                      return (
+                        <div key={num} className="bg-gray-50 rounded-lg p-2 sm:p-3">
+                          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                            <span className="text-xs font-bold text-green-700 w-5">{idx + 1}º</span>
+                            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow relative shrink-0 ${
+                              ehNumeroUm ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' : 'bg-green-600'
+                            }`}>
+                              {num}
+                              {ehNumeroUm && <span className="absolute -top-1 -right-1 text-yellow-200 text-xs">★</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-center mb-1 gap-1">
+                                <span className="text-xs font-semibold text-gray-700 truncate">
+                                  {frequencia}x ({porcentagem.toFixed(0)}%)
+                                </span>
+                              </div>
+                              <div className="bg-gray-200 h-5 sm:h-6 rounded-full overflow-hidden">
+                                <div 
+                                  className="bg-gradient-to-r from-green-500 to-green-600 h-full flex items-center justify-center transition-all"
+                                  style={{ width: `${porcentagem}%` }}
+                                >
+                                  {porcentagem > 20 && (
+                                    <span className="text-xs text-white font-bold">{frequencia}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+                
+                <div className="mt-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg p-3">
+                  <h4 className="font-bold text-yellow-900 text-xs sm:text-sm mb-2">📊 Análise de Probabilidade</h4>
+                  <ul className="text-xs text-gray-700 space-y-1">
+                    <li>• <strong>Alta (5-6x):</strong> ~31-38% dos anos</li>
+                    <li>• <strong>Média (3-4x):</strong> ~19-25% dos anos</li>
+                    <li>• <strong>Baixa (1-2x):</strong> ~6-13% dos anos</li>
+                    <li>• <strong>★ Numerológicos:</strong> Reduzem para 1</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            <div className="p-3 sm:p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 border-t-2 border-yellow-200">
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-yellow-900 text-sm sm:text-base">
+                🍀 Numerologia 2026
+              </h3>
+              <div className="bg-white rounded-lg p-3 sm:p-4 shadow">
+                <p className="text-xs sm:text-base font-semibold text-gray-800 mb-2">
+                  2+0+2+6=10 → 1+0 = <span className="text-xl sm:text-3xl text-yellow-600">1</span>
+                </p>
+                <p className="text-xs sm:text-sm text-gray-700 mb-3">
+                  Novos começos, liderança e independência
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-7 gap-1 sm:gap-2">
+                  {[1, 10, 19, 28, 37, 46, 55].map(num => (
+                    <div key={num} className="bg-gradient-to-br from-yellow-400 to-yellow-600 text-white font-bold rounded-lg p-2 sm:p-3 text-center text-sm sm:text-base shadow">
+                      {num}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      <div className="max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
           {bolao.jogos.map((jogo, idx) => {
             const meuJogo = jogo.usuario?.id === usuario?.id;
             const estaEditando = jogoEditando === jogo.id;
@@ -470,12 +776,12 @@ export default function BolaoPage() {
             return (
               <div
                 key={jogo.id}
-                className={`bg-white rounded-xl p-4 shadow-lg ${
+                className={`bg-white rounded-xl p-3 sm:p-4 shadow-lg ${
                   meuJogo ? 'border-4 border-yellow-400' : ''
                 }`}
               >
-                <div className="flex justify-between items-center mb-3">
-                  <span className="font-bold text-green-700 text-lg">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+                  <span className="font-bold text-green-700 text-base sm:text-lg">
                     Jogo {(idx + 1).toString().padStart(2, '0')}
                   </span>
                   {jogo.reservado && (
@@ -485,16 +791,15 @@ export default function BolaoPage() {
                     </span>
                   )}
                   {!jogo.reservado && (
-                    <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                      <Sparkles size={12} />
-                      Disponível
+                    <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-semibold">
+                      ✨ Disponível
                     </span>
                   )}
                 </div>
 
                 {estaEditando ? (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-10 gap-1">
+                    <div className="grid grid-cols-6 sm:grid-cols-10 gap-1">
                       {Array.from({ length: 60 }, (_, i) => i + 1).map(num => {
                         const selecionado = numerosEditando.includes(num);
                         const ehNumeroUm = reduzirNumerologico(num) === 1;
@@ -573,16 +878,16 @@ export default function BolaoPage() {
                       </div>
                     )}
 
-                    {!isAdmin && !jogo.reservado && (
+                    {!jogo.reservado && (
                       <button
                         onClick={() => reservarJogo(jogo.id)}
-                        className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-2 rounded-lg font-semibold hover:from-green-700 hover:to-green-800 transition-all"
+                        className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition-all"
                       >
                         Escolher este jogo
                       </button>
                     )}
 
-                    {meuJogo && (
+                    {meuJogo && usuario && (
                       <div className="flex gap-2">
                         <button
                           onClick={() => iniciarEdicao(jogo)}
@@ -609,21 +914,21 @@ export default function BolaoPage() {
       </div>
 
       {mostrarAuth && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <h2 className="text-2xl font-bold text-green-700 mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl sm:text-2xl font-bold text-green-700 mb-3 sm:mb-4">
               {isRegistering ? 'Cadastro' : 'Entre no Bolão'}
             </h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-sm sm:text-base text-gray-600 mb-4">
               {isRegistering 
                 ? 'Complete seu cadastro:'
                 : 'Digite seu WhatsApp para entrar:'}
             </p>
             
-            <form onSubmit={handleAuth} className="space-y-4">
+            <form onSubmit={handleAuth} className="space-y-3 sm:space-y-4">
               {isRegistering && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">
                     Nome
                   </label>
                   <input
@@ -632,14 +937,14 @@ export default function BolaoPage() {
                     onChange={(e) => setNome(e.target.value)}
                     placeholder="Seu nome completo"
                     required
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none"
+                    className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none"
                     autoFocus
                   />
                 </div>
               )}
               
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1">
                   WhatsApp
                 </label>
                 <input
@@ -662,12 +967,12 @@ export default function BolaoPage() {
                   placeholder="(12) 98765-4321"
                   required
                   maxLength={15}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none"
+                  className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none"
                   autoFocus={!isRegistering}
                 />
               </div>
               
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-col sm:flex-row">
                 <button
                   type="button"
                   onClick={() => {
@@ -676,13 +981,13 @@ export default function BolaoPage() {
                     setNome('');
                     setWhatsApp('');
                   }}
-                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition-all"
+                  className="flex-1 bg-gray-500 text-white py-2 sm:py-3 rounded-lg font-semibold hover:bg-gray-600 transition-all text-sm sm:text-base"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-all"
+                  className="flex-1 bg-green-600 text-white py-2 sm:py-3 rounded-lg font-semibold hover:bg-green-700 transition-all text-sm sm:text-base"
                 >
                   {isRegistering ? 'Cadastrar' : 'Entrar'}
                 </button>
@@ -692,7 +997,7 @@ export default function BolaoPage() {
                 <button
                   type="button"
                   onClick={() => setIsRegistering(true)}
-                  className="w-full text-green-700 font-semibold hover:underline"
+                  className="w-full text-green-700 font-semibold hover:underline text-sm sm:text-base"
                 >
                   Não tem conta? Cadastre-se
                 </button>
@@ -702,7 +1007,7 @@ export default function BolaoPage() {
                 <button
                   type="button"
                   onClick={() => setIsRegistering(false)}
-                  className="w-full text-green-700 font-semibold hover:underline"
+                  className="w-full text-green-700 font-semibold hover:underline text-sm sm:text-base"
                 >
                   Já tem conta? Entre
                 </button>
@@ -749,65 +1054,32 @@ export default function BolaoPage() {
         </div>
       )}
 
-      {/* Painel Admin */}
-      {isAdmin && (
-        <div className="max-w-6xl mx-auto p-4 mt-6">
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="bg-green-700 text-white p-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <Users size={24} />
-                  Painel Admin - Participantes
-                </h2>
-                <button
-                  onClick={imprimirUsuarios}
-                  className="bg-white text-green-700 px-4 py-2 rounded-lg font-semibold hover:bg-green-50 transition-all flex items-center gap-2"
-                >
-                  <Printer size={18} />
-                  Imprimir
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6">
-              {usuariosVinculados.length === 0 ? (
-                <p className="text-gray-600 text-center py-8">Nenhum participante vinculado ainda</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b-2 border-gray-300">
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Nome</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">WhatsApp</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Jogo</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Números</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Editado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {usuariosVinculados.map((jogo, idx) => (
-                        <tr key={jogo.id} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="py-3 px-4 text-gray-800 font-semibold">{jogo.usuario?.nome || '-'}</td>
-                          <td className="py-3 px-4 text-gray-600">{jogo.usuario?.whatsapp ? formatPhoneNumber(jogo.usuario.whatsapp) : '-'}</td>
-                          <td className="py-3 px-4 text-gray-600">Jogo {(idx + 1).toString().padStart(2, '0')}</td>
-                          <td className="py-3 px-4 text-gray-600">{jogo.numeros?.join(', ') || '-'}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${jogo.editado ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
-                              {jogo.editado ? 'Sim' : 'Não'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <DisclaimerFooter />
+      {/* AlertDialog para mensagens */}
+      <AlertDialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{alertDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{alertDialog.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {alertDialog.cancelText && (
+              <AlertDialogCancel>{alertDialog.cancelText}</AlertDialogCancel>
+            )}
+            <AlertDialogAction
+              onClick={() => {
+                if (alertDialog.onConfirm) {
+                  alertDialog.onConfirm();
+                }
+                setAlertDialog({ ...alertDialog, open: false });
+              }}
+              className={alertDialog.isDestructive ? 'bg-red-600 hover:bg-red-700' : ''}
+            >
+              {alertDialog.confirmText || 'Confirmar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      </div>
     </div>
   );
 }

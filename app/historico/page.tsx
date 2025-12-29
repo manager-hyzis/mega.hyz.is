@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, Printer, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { formatPhoneNumber } from '@/lib/phone';
-import DisclaimerFooter from '@/app/components/DisclaimerFooter';
 
 interface Jogo {
   id: string;
@@ -95,7 +94,7 @@ export default function HistoricoPage() {
     let conteudo = `
       <html>
         <head>
-          <title>Mega da Virada 2026 - Histórico</title>
+          <title>Mega da Virada 2025 - Histórico</title>
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; }
             h1 { color: #15803d; text-align: center; }
@@ -111,7 +110,7 @@ export default function HistoricoPage() {
           </style>
         </head>
         <body>
-          <h1>🎰 Mega da Virada 2026</h1>
+          <h1>🎰 Mega da Virada 2025</h1>
           <p style="text-align: center; color: #666;">Histórico de Bolões - ${new Date().toLocaleDateString('pt-BR')}</p>
     `;
 
@@ -173,8 +172,7 @@ export default function HistoricoPage() {
         {showAdminLogin && (
           <div className="bg-white rounded-xl p-6 max-w-sm w-full">
             <h2 className="text-2xl font-bold text-green-700 mb-4 flex items-center gap-2">
-              <Lock size={24} />
-              Acesso Admin
+              🔒 Acesso Admin
             </h2>
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
@@ -204,24 +202,27 @@ export default function HistoricoPage() {
   const grupos = Array.from(new Set(boloes.map(b => b.grupoId)));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-600 to-emerald-700">
-      <div className="bg-green-700 shadow-lg">
-        <div className="max-w-6xl mx-auto p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.push('/')}
-                className="text-white hover:bg-green-600 p-2 rounded-lg transition-all"
-              >
-                <ArrowLeft size={24} />
-              </button>
-              <h1 className="text-3xl font-bold text-white">Histórico de Bolões</h1>
+    <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-600 to-emerald-700 p-3 sm:p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1">
+              <span className="text-3xl sm:text-4xl">🍀</span>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-3xl font-bold text-green-700">Mega da Virada 2025</h1>
+                <p className="text-xs sm:text-sm text-gray-600">Histórico de Bolões</p>
+              </div>
             </div>
+            <button
+              onClick={() => router.push('/')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center gap-1 sm:gap-2 transition-all text-sm sm:text-base shrink-0"
+            >
+              ← Voltar
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-6xl mx-auto p-4 mt-6">
         {loading ? (
           <div className="text-white text-center py-8">Carregando...</div>
         ) : grupos.length === 0 ? (
@@ -248,33 +249,94 @@ export default function HistoricoPage() {
                         onClick={() => imprimirGrupo(grupoId)}
                         className="bg-white text-green-700 px-4 py-2 rounded-lg font-semibold hover:bg-green-50 transition-all flex items-center gap-2"
                       >
-                        <Printer size={18} />
-                        Imprimir
+                        🖨️ Imprimir
                       </button>
                     </div>
                   </div>
 
                   <div className="p-4">
-                    <div className="space-y-3">
-                      {gruposBoloes.map((bolao, idx) => {
+                    <div className="space-y-4">
+                      {gruposBoloes.map((bolao) => {
                         const participantes = bolao.jogos.filter(j => j.usuario).length;
                         const disponíveis = bolao.jogos.filter(j => !j.usuario).length;
+                        const numerosParticipantes = new Set(
+                          bolao.jogos
+                            .filter(j => j.usuario)
+                            .flatMap(j => j.numeros)
+                        );
+                        const todoNumeros = new Set(Array.from({length: 60}, (_, i) => i + 1));
+                        const numerosFaltando = Array.from(todoNumeros).filter(n => !numerosParticipantes.has(n));
                         
                         return (
-                          <div key={bolao.id} className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h3 className="font-semibold text-gray-800">
-                                  {bolao.nome}
-                                </h3>
-                                <p className="text-sm text-gray-600">{bolao.descricao}</p>
-                                <div className="flex gap-4 mt-2 text-sm">
-                                  <span className="text-green-700 font-semibold">👥 {participantes} participante(s)</span>
-                                  <span className="text-yellow-700 font-semibold">🎮 {disponíveis} disponível(is)</span>
-                                  <span className="text-blue-700 font-semibold">🎯 {bolao.jogos.length} total</span>
+                          <div key={bolao.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-all">
+                            <div className="bg-gray-50 p-4 border-b">
+                              <h3 className="font-bold text-gray-800 text-lg mb-2">{bolao.nome}</h3>
+                              <p className="text-sm text-gray-600 mb-3">{bolao.descricao}</p>
+                              <div className="grid grid-cols-4 gap-2 text-sm">
+                                <div className="bg-white p-2 rounded border border-green-200">
+                                  <div className="text-green-700 font-bold">{participantes}</div>
+                                  <div className="text-xs text-gray-600">Participantes</div>
+                                </div>
+                                <div className="bg-white p-2 rounded border border-yellow-200">
+                                  <div className="text-yellow-700 font-bold">{disponíveis}</div>
+                                  <div className="text-xs text-gray-600">Disponíveis</div>
+                                </div>
+                                <div className="bg-white p-2 rounded border border-blue-200">
+                                  <div className="text-blue-700 font-bold">{bolao.jogos.length}</div>
+                                  <div className="text-xs text-gray-600">Total Jogos</div>
+                                </div>
+                                <div className="bg-white p-2 rounded border border-red-200">
+                                  <div className="text-red-700 font-bold">{numerosFaltando.length}</div>
+                                  <div className="text-xs text-gray-600">Números Faltando</div>
                                 </div>
                               </div>
                             </div>
+                            
+                            {numerosFaltando.length > 0 && (
+                              <div className="p-4 bg-red-50 border-t border-red-200">
+                                <p className="text-sm font-semibold text-red-700 mb-2">Números faltando:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {numerosFaltando.slice(0, 20).map(num => (
+                                    <span key={num} className="bg-red-200 text-red-800 text-xs font-bold px-2 py-1 rounded">
+                                      {num}
+                                    </span>
+                                  ))}
+                                  {numerosFaltando.length > 20 && (
+                                    <span className="text-xs text-red-700 px-2 py-1">
+                                      +{numerosFaltando.length - 20} mais
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {participantes > 0 && (
+                              <div className="p-4 border-t">
+                                <p className="text-sm font-semibold text-gray-700 mb-2">Participantes:</p>
+                                <div className="space-y-2">
+                                  {bolao.jogos
+                                    .filter(j => j.usuario)
+                                    .map((jogo, idx) => (
+                                      <div key={jogo.id} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
+                                        <div>
+                                          <span className="font-semibold text-gray-800">{jogo.usuario?.nome}</span>
+                                          <span className="text-gray-600 text-xs ml-2">({formatPhoneNumber(jogo.usuario?.whatsapp || '')})</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                            Jogo {(idx + 1).toString().padStart(2, '0')}
+                                          </span>
+                                          {jogo.editado && (
+                                            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                                              ✏️ Editado
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -286,8 +348,6 @@ export default function HistoricoPage() {
           </div>
         )}
       </div>
-
-      <DisclaimerFooter />
     </div>
   );
 }

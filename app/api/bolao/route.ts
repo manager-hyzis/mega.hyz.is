@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     
     const bolao = await prisma.bolao.create({
       data: {
-        nome: nome || 'Mega da Virada 2026',
+        nome: nome || 'Mega da Virada 2025',
         descricao: descricao || 'Bolão colaborativo',
         linkCompartilhamento,
         grupoId: grupoId || new Date().getTime().toString(),
@@ -48,6 +48,25 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const linkId = searchParams.get('linkId');
+    const listar = searchParams.get('listar');
+    
+    // Listar todos os bolões ativos
+    if (listar === 'true') {
+      const boloes = await prisma.bolao.findMany({
+        include: {
+          jogos: {
+            include: {
+              usuario: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+      
+      return NextResponse.json(boloes);
+    }
     
     if (!linkId) {
       return NextResponse.json(
@@ -85,6 +104,45 @@ export async function GET(req: NextRequest) {
     console.error('Erro ao buscar bolão:', error);
     return NextResponse.json(
       { error: 'Erro ao buscar bolão' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const linkId = searchParams.get('linkId');
+    
+    if (!linkId) {
+      return NextResponse.json(
+        { error: 'Link ID não fornecido' },
+        { status: 400 }
+      );
+    }
+    
+    const linkCompartilhamento = `${process.env.NEXT_PUBLIC_APP_URL}/bolao/${linkId}`;
+    
+    // Deletar todos os jogos do bolão primeiro
+    await prisma.jogo.deleteMany({
+      where: {
+        bolao: {
+          linkCompartilhamento
+        }
+      }
+    });
+    
+    // Deletar o bolão
+    await prisma.bolao.delete({
+      where: { linkCompartilhamento }
+    });
+    
+    return NextResponse.json({ success: true });
+    
+  } catch (error) {
+    console.error('Erro ao deletar bolão:', error);
+    return NextResponse.json(
+      { error: 'Erro ao deletar bolão' },
       { status: 500 }
     );
   }

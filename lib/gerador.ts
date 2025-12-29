@@ -39,22 +39,26 @@ export function gerarJogoInteligente(): number[] {
   const numerosUm = [1, 10, 19, 28, 37, 46, 55];
   const freq = calcularFrequencia();
   
-  const qtdNumerosUm = 2 + Math.floor(Math.random() * 2);
+  // Adicionar alguns números da numerologia 2026 (número 1)
+  const qtdNumerosUm = 1 + Math.floor(Math.random() * 3);
   const numerosUmEmbaralhados = [...numerosUm].sort(() => Math.random() - 0.5);
   for (let i = 0; i < qtdNumerosUm && numeros.size < 6; i++) {
     numeros.add(numerosUmEmbaralhados[i]);
   }
   
+  // Adicionar alguns números mais frequentes do histórico
   const topFrequentes = Object.entries(freq)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
+    .slice(0, 30)
     .map(x => parseInt(x[0]));
   
   for (let i = 0; i < 2 && numeros.size < 6; i++) {
-    const num = topFrequentes[Math.floor(Math.random() * 10)];
+    const idx = Math.floor(Math.random() * Math.min(15, topFrequentes.length));
+    const num = topFrequentes[idx];
     if (num) numeros.add(num);
   }
   
+  // Preencher com números aleatórios garantindo distribuição entre dezenas
   const dezenas = [
     { range: [1, 10], count: 0 },
     { range: [11, 20], count: 0 },
@@ -70,15 +74,22 @@ export function gerarJogoInteligente(): number[] {
   });
   
   while (numeros.size < 6) {
-    const dezenaVazia = dezenas.filter(d => d.count === 0).sort(() => Math.random() - 0.5)[0];
-    if (dezenaVazia) {
-      const num = dezenaVazia.range[0] + Math.floor(Math.random() * 10);
-      if (num <= 60 && num >= 1) {
-        numeros.add(num);
-        dezenaVazia.count++;
-      }
+    // Priorizar dezenas vazias
+    const dezenasVazias = dezenas.filter(d => d.count === 0);
+    let num: number;
+    
+    if (dezenasVazias.length > 0) {
+      const dezenaEscolhida = dezenasVazias[Math.floor(Math.random() * dezenasVazias.length)];
+      num = dezenaEscolhida.range[0] + Math.floor(Math.random() * 10);
     } else {
-      numeros.add(Math.floor(Math.random() * 60) + 1);
+      // Se todas as dezenas têm números, escolher aleatoriamente
+      num = Math.floor(Math.random() * 60) + 1;
+    }
+    
+    if (num <= 60 && num >= 1 && !numeros.has(num)) {
+      numeros.add(num);
+      const dez = dezenas.find(d => num >= d.range[0] && num <= d.range[1]);
+      if (dez) dez.count++;
     }
   }
   

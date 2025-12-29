@@ -1,6 +1,6 @@
-# Mega da Virada 2026 - Sistema de Bolão Colaborativo
+# Mega da Virada 2025 - Sistema de Bolão Colaborativo
 
-Um sistema completo de bolão colaborativo para a Mega da Virada 2026 com autenticação por whatsapp, geração inteligente de números baseada em numerologia e análise histórica.
+Um sistema completo de bolão colaborativo para a Mega da Virada 2025 com autenticação por whatsapp, geração inteligente de números baseada em numerologia e análise histórica.
 
 ## Funcionalidades
 
