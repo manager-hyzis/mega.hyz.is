@@ -1,0 +1,55 @@
+generator client {
+  provider            = "prisma-client"
+  importFileExtension = ""
+  output              = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id        String   @id @default(uuid())
+  nome      String
+  whatsapp  String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  jogos     Jogo[]
+  
+  @@map("usuarios")
+}
+
+model Bolao {
+  id          String   @id @default(uuid())
+  nome        String
+  descricao   String?
+  ativo       Boolean  @default(true)
+  linkCompartilhamento String @unique
+  grupoId     String?  @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  jogos       Jogo[]
+  
+  @@map("boloes")
+  @@index([grupoId])
+}
+
+model Jogo {
+  id          String   @id @default(uuid())
+  numeros     Int[]
+  reservado   Boolean  @default(false)
+  editado     Boolean  @default(false)
+  
+  bolaoId     String
+  bolao       Bolao    @relation(fields: [bolaoId], references: [id], onDelete: Cascade)
+  
+  usuarioId   String?
+  usuario     Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("jogos")
+}
